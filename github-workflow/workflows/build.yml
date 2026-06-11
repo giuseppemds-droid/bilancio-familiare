@@ -1,0 +1,57 @@
+name: Build App Desktop
+
+# Avvia la build quando crei un tag versione (es. v1.0.0) oppure manualmente
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout codice
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Installa dipendenze Rust (cache)
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installa dipendenze frontend
+        run: npm install
+
+      - name: Build app (Tauri)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Bilancio Familiare ${{ github.ref_name }}"
+          releaseBody: "Scarica il file adatto al tuo sistema operativo qui sotto in 'Assets':\n- macOS Apple Silicon (M1/M2/M3): file con 'aarch64'\n- macOS Intel: file con 'x64'\n- Windows: file .msi o .exe"
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
